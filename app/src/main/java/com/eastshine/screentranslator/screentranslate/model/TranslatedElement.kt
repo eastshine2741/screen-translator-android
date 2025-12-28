@@ -8,7 +8,7 @@ data class TranslatedElement(
     val translatedText: String,
     val boundingBox: Rect,
     val cornerPoints: Array<Point>?,
-    val confidence: Float
+    val confidence: Float,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -22,7 +22,9 @@ data class TranslatedElement(
         if (cornerPoints != null) {
             if (other.cornerPoints == null) return false
             if (!cornerPoints.contentEquals(other.cornerPoints)) return false
-        } else if (other.cornerPoints != null) return false
+        } else if (other.cornerPoints != null) {
+            return false
+        }
 
         return confidence == other.confidence
     }

@@ -10,36 +10,38 @@ import android.view.View
 import com.eastshine.screentranslator.screentranslate.model.TranslatedElement
 
 class TranslationOverlayView(context: Context) : View(context) {
-
     private val translatedElements = mutableListOf<TranslatedElement>()
 
     private var sourceWidth: Int = 0
     private var sourceHeight: Int = 0
 
-    private val backgroundPaint = Paint().apply {
-        style = Paint.Style.FILL
-        isAntiAlias = true
-    }
+    private val backgroundPaint =
+        Paint().apply {
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
 
-    private val textPaint = Paint().apply {
-        color = Color.WHITE
-        textSize = 40f
-        isAntiAlias = true
-        isFakeBoldText = true
-        setShadowLayer(4f, 2f, 2f, Color.BLACK)
-    }
+    private val textPaint =
+        Paint().apply {
+            color = Color.WHITE
+            textSize = 40f
+            isAntiAlias = true
+            isFakeBoldText = true
+            setShadowLayer(4f, 2f, 2f, Color.BLACK)
+        }
 
-    private val borderPaint = Paint().apply {
-        style = Paint.Style.STROKE
-        color = Color.argb(150, 0, 255, 0)
-        strokeWidth = 2f
-        isAntiAlias = true
-    }
+    private val borderPaint =
+        Paint().apply {
+            style = Paint.Style.STROKE
+            color = Color.argb(150, 0, 255, 0)
+            strokeWidth = 2f
+            isAntiAlias = true
+        }
 
     fun updateTranslations(
         elements: List<TranslatedElement>,
         sourceWidth: Int,
-        sourceHeight: Int
+        sourceHeight: Int,
     ) {
         this.translatedElements.clear()
         this.translatedElements.addAll(elements)
@@ -66,7 +68,7 @@ class TranslationOverlayView(context: Context) : View(context) {
         canvas: Canvas,
         element: TranslatedElement,
         scaleX: Float,
-        scaleY: Float
+        scaleY: Float,
     ) {
         val rect = transformRect(element.boundingBox, scaleX, scaleY)
 
@@ -104,13 +106,13 @@ class TranslationOverlayView(context: Context) : View(context) {
     private fun transformRect(
         rect: Rect,
         scaleX: Float,
-        scaleY: Float
+        scaleY: Float,
     ): RectF {
         return RectF(
             rect.left * scaleX,
             rect.top * scaleY,
             rect.right * scaleX,
-            rect.bottom * scaleY
+            rect.bottom * scaleY,
         )
     }
 

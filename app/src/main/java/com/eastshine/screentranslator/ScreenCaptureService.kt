@@ -34,7 +34,6 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class ScreenCaptureService : Service() {
-
     @Inject
     lateinit var ocrProcessor: OCRProcessor
 
@@ -45,11 +44,12 @@ class ScreenCaptureService : Service() {
     private lateinit var windowManager: WindowManager
 
     private var mediaProjection: MediaProjection? = null
-    private val mediaProjectionCallback = object : MediaProjection.Callback() {
-        override fun onStop() {
-            stopCapture()
+    private val mediaProjectionCallback =
+        object : MediaProjection.Callback() {
+            override fun onStop() {
+                stopCapture()
+            }
         }
-    }
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
     private val handler = Handler(Looper.getMainLooper())
@@ -72,7 +72,11 @@ class ScreenCaptureService : Service() {
         setupOverlayView()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
         startForeground(NOTIFICATION_ID, createNotification())
 
         intent?.let {
@@ -90,20 +94,24 @@ class ScreenCaptureService : Service() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         overlayView = TranslationOverlayView(this)
 
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+        val params =
+            WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        )
+                PixelFormat.TRANSLUCENT,
+            )
 
         windowManager.addView(overlayView, params)
     }
 
-    private fun startCapture(resultCode: Int, data: Intent) {
+    private fun startCapture(
+        resultCode: Int,
+        data: Intent,
+    ) {
         val manager = getSystemService(MediaProjectionManager::class.java)
         mediaProjection = manager.getMediaProjection(resultCode, data)
         mediaProjection?.registerCallback(mediaProjectionCallback, handler)
@@ -113,19 +121,21 @@ class ScreenCaptureService : Service() {
         val height = metrics.heightPixels
         val density = metrics.densityDpi
 
-        imageReader = ImageReader.newInstance(
-            width, height,
-            PixelFormat.RGBA_8888,
-            2
-        )
+        imageReader =
+            ImageReader.newInstance(
+                width, height,
+                PixelFormat.RGBA_8888,
+                2,
+            )
 
-        virtualDisplay = mediaProjection?.createVirtualDisplay(
-            "ScreenCapture",
-            width, height, density,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            imageReader?.surface,
-            null, null
-        )
+        virtualDisplay =
+            mediaProjection?.createVirtualDisplay(
+                "ScreenCapture",
+                width, height, density,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                imageReader?.surface,
+                null, null,
+            )
 
         imageReader?.setOnImageAvailableListener({ reader ->
             captureScreen(reader)
@@ -169,7 +179,7 @@ class ScreenCaptureService : Service() {
                     overlayView.updateTranslations(
                         translatedElements,
                         bitmap.width,
-                        bitmap.height
+                        bitmap.height,
                     )
                 }
             } catch (e: Exception) {
@@ -185,16 +195,20 @@ class ScreenCaptureService : Service() {
         val rowStride = planes[0].rowStride
         val rowPadding = rowStride - pixelStride * image.width
 
-        val bitmap = Bitmap.createBitmap(
-            image.width + rowPadding / pixelStride,
-            image.height,
-            Bitmap.Config.ARGB_8888
-        )
+        val bitmap =
+            Bitmap.createBitmap(
+                image.width + rowPadding / pixelStride,
+                image.height,
+                Bitmap.Config.ARGB_8888,
+            )
         bitmap.copyPixelsFromBuffer(buffer)
 
         return Bitmap.createBitmap(
-            bitmap, 0, 0,
-            image.width, image.height
+            bitmap,
+            0,
+            0,
+            image.width,
+            image.height,
         )
     }
 
@@ -211,14 +225,14 @@ class ScreenCaptureService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "화면 번역 서비스",
-
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "실시간 화면 번역이 실행 중입니다"
-            }
+            val channel =
+                NotificationChannel(
+                    CHANNEL_ID,
+                    "화면 번역 서비스",
+                    NotificationManager.IMPORTANCE_LOW,
+                ).apply {
+                    description = "실시간 화면 번역이 실행 중입니다"
+                }
 
             val notificationManager = getSystemService(NotificationManager::class.java)
             notificationManager.createNotificationChannel(channel)

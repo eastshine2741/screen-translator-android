@@ -20,7 +20,9 @@ data class TextElement(
         if (cornerPoints != null) {
             if (other.cornerPoints == null) return false
             if (!cornerPoints.contentEquals(other.cornerPoints)) return false
-        } else if (other.cornerPoints != null) return false
+        } else if (other.cornerPoints != null) {
+            return false
+        }
 
         return confidence == other.confidence
     }

@@ -14,16 +14,16 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
-
-    private val mediaProjectionLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == RESULT_OK) {
-            result.data?.let { data ->
-                startTranslationService(RESULT_OK, data)
+    private val mediaProjectionLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult(),
+        ) { result ->
+            if (result.resultCode == RESULT_OK) {
+                result.data?.let { data ->
+                    startTranslationService(RESULT_OK, data)
+                }
             }
         }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,10 +40,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkPermissionsAndStart() {
         if (!Settings.canDrawOverlays(this)) {
-            val intent = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
+            val intent =
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName"),
+                )
             startActivity(intent)
             Toast.makeText(this, "오버레이 권한을 허용해주세요", Toast.LENGTH_LONG).show()
             return
@@ -52,15 +53,19 @@ class MainActivity : AppCompatActivity() {
         val mediaProjectionManager =
             getSystemService(MediaProjectionManager::class.java)
         mediaProjectionLauncher.launch(
-            mediaProjectionManager.createScreenCaptureIntent()
+            mediaProjectionManager.createScreenCaptureIntent(),
         )
     }
 
-    private fun startTranslationService(resultCode: Int, data: Intent) {
-        val intent = Intent(this, ScreenCaptureService::class.java).apply {
-            putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, resultCode)
-            putExtra(ScreenCaptureService.EXTRA_DATA, data)
-        }
+    private fun startTranslationService(
+        resultCode: Int,
+        data: Intent,
+    ) {
+        val intent =
+            Intent(this, ScreenCaptureService::class.java).apply {
+                putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, resultCode)
+                putExtra(ScreenCaptureService.EXTRA_DATA, data)
+            }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)

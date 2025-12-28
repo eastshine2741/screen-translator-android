@@ -9,6 +9,5 @@ class DummyOCRProcessor : OCRProcessor {
     }
 
     override fun release() {
-
     }
 }
