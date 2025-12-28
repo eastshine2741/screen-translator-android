@@ -57,7 +57,7 @@ class ScreenCaptureService : Service() {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private var lastProcessTime = 0L
-    private val processingInterval = 1000L
+    private val processingInterval = 5000L
 
     companion object {
         private const val NOTIFICATION_ID = 1001

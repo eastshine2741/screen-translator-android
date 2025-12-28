@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.google.services)
     kotlin("kapt")
 }
 
@@ -52,6 +53,10 @@ dependencies {
     kapt(libs.hilt.compiler)
 
     implementation(libs.mlkit)
+
+    // Firebase BoM
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.ai)
 }
 
 kapt {

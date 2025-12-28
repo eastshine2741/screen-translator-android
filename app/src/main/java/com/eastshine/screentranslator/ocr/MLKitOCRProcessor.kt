@@ -26,7 +26,10 @@ class MLKitOCRProcessor(
 
             try {
                 val result = recognizer.process(image).await()
-                extractTextElements(result)
+                extractTextElements(result).also {
+                    Log.d("OCRProcessor", "Total ${it.size} elements extracted:")
+                    it.forEach(::logTextElement)
+                }
             } catch (e: Exception) {
                 Log.e("OCRProcessor", "OCR failed", e)
                 emptyList()
@@ -44,6 +47,15 @@ class MLKitOCRProcessor(
                 confidence = block.lines.sumOf { it.confidence.toDouble() },
             )
         }
+    }
+
+    private fun logTextElement(textElement: TextElement) {
+        Log.d(
+            "OCRProcessor",
+            "text = ${textElement.text}\nboundingBox = ${textElement.boundingBox}\n" +
+                "cornerPoints = ${textElement.cornerPoints}\n" +
+                "confidence = ${textElement.confidence}",
+        )
     }
 
     override fun release() {
