@@ -8,7 +8,7 @@ data class TranslatedElement(
     val translatedText: String,
     val boundingBox: Rect,
     val cornerPoints: Array<Point>?,
-    val confidence: Float,
+    val confidence: Double,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
