@@ -32,26 +32,15 @@ class MLKitOCRProcessor(
     }
 
     private fun extractTextElements(result: Text): List<TextElement> {
-        val elements = mutableListOf<TextElement>()
-
-        for (block in result.textBlocks) {
-            for (line in block.lines) {
-                for (element in line.elements) {
-                    val boundingBox = element.boundingBox ?: continue
-
-                    elements.add(
-                        TextElement(
-                            text = element.text,
-                            boundingBox = boundingBox,
-                            cornerPoints = element.cornerPoints,
-                            confidence = element.confidence
-                        )
-                    )
-                }
-            }
+        return result.textBlocks.mapNotNull { block ->
+            val boundingBox = block.boundingBox ?: return@mapNotNull null
+            TextElement(
+                text = block.text,
+                boundingBox = boundingBox,
+                cornerPoints = block.cornerPoints,
+                confidence = block.lines.sumOf { it.confidence.toDouble() } // FIXME: 잘 모르지만 일단 sum으로 해놓음
+            )
         }
-
-        return elements
     }
 
     override fun release() {
