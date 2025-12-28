@@ -11,6 +11,7 @@ import kotlinx.coroutines.withContext
 class GeminiTranslator(
     private val targetLanguage: String = "Korean",
 ) : LLMTranslator {
+    // TODO: fine-tuning https://firebase.google.com/docs/ai-logic/model-parameters?api=dev
     private val generativeModel =
         Firebase.ai(
             backend = GenerativeBackend.googleAI(),
