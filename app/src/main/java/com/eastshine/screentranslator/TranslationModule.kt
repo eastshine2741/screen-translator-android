@@ -4,7 +4,7 @@ import android.content.Context
 import com.eastshine.screentranslator.ocr.MLKitOCRProcessor
 import com.eastshine.screentranslator.ocr.OCRProcessor
 import com.eastshine.screentranslator.screentranslate.ScreenTranslator
-import com.eastshine.screentranslator.translate.GeminiTranslator
+import com.eastshine.screentranslator.translate.DummyLLMTranslator
 import com.eastshine.screentranslator.translate.LLMTranslator
 import dagger.Module
 import dagger.Provides
@@ -24,9 +24,7 @@ object TranslationModule {
 
     @Provides
     fun provideLLMTranslator(): LLMTranslator {
-        return GeminiTranslator(
-            targetLanguage = "Korean",
-        )
+        return DummyLLMTranslator()
     }
 
     @Provides

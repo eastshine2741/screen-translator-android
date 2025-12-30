@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
@@ -59,6 +60,9 @@ class ScreenCaptureService : Service() {
     private var lastProcessTime = 0L
     private val processingInterval = 2000L
 
+    private var savedResultCode: Int = 0
+    private var savedData: Intent? = null
+
     companion object {
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "ScreenCaptureChannel"
@@ -112,14 +116,34 @@ class ScreenCaptureService : Service() {
         resultCode: Int,
         data: Intent,
     ) {
+        savedResultCode = resultCode
+        savedData = data
+
+        // MediaProjection 생성 (한 번만)
         val manager = getSystemService(MediaProjectionManager::class.java)
         mediaProjection = manager.getMediaProjection(resultCode, data)
         mediaProjection?.registerCallback(mediaProjectionCallback, handler)
 
-        val metrics = resources.displayMetrics
-        val width = metrics.widthPixels
-        val height = metrics.heightPixels
-        val density = metrics.densityDpi
+        // overlayView가 레이아웃된 후에 VirtualDisplay 생성
+        overlayView.post {
+            createVirtualDisplayAndImageReader()
+        }
+    }
+
+    private fun createVirtualDisplayAndImageReader() {
+        val width = overlayView.width
+        val height = overlayView.height
+        val density = resources.displayMetrics.densityDpi
+
+        if (width <= 0 || height <= 0) {
+            Log.e("ScreenCaptureService", "OverlayView not properly laid out: width=$width, height=$height")
+            return
+        }
+
+        Log.d(
+            "ScreenCaptureService",
+            "Creating VirtualDisplay and ImageReader with dimensions: width=$width, height=$height, density=$density",
+        )
 
         imageReader =
             ImageReader.newInstance(
@@ -138,6 +162,46 @@ class ScreenCaptureService : Service() {
             )
 
         imageReader?.setOnImageAvailableListener({ reader ->
+            Log.d("ScreenCaptureService", "image available")
+            captureScreen(reader)
+        }, handler)
+    }
+
+    private fun resizeVirtualDisplay() {
+        val width = overlayView.width
+        val height = overlayView.height
+        val density = resources.displayMetrics.densityDpi
+
+        if (width <= 0 || height <= 0) {
+            Log.e("ScreenCaptureService", "OverlayView not properly laid out for resize: width=$width, height=$height")
+            return
+        }
+
+        if (virtualDisplay == null) {
+            Log.e("ScreenCaptureService", "VirtualDisplay is null, cannot resize")
+            return
+        }
+
+        Log.d("ScreenCaptureService", "Resizing VirtualDisplay to: width=$width, height=$height")
+
+        // 기존 ImageReader 정리
+        imageReader?.close()
+
+        // 새로운 크기로 ImageReader 재생성
+        imageReader =
+            ImageReader.newInstance(
+                width, height,
+                PixelFormat.RGBA_8888,
+                2,
+            )
+
+        // VirtualDisplay 크기 조정 및 새 surface 설정
+        virtualDisplay?.resize(width, height, density)
+        virtualDisplay?.surface = imageReader?.surface
+
+        // 리스너 재설정
+        imageReader?.setOnImageAvailableListener({ reader ->
+            Log.d("ScreenCaptureService", "image available")
             captureScreen(reader)
         }, handler)
     }
@@ -147,6 +211,7 @@ class ScreenCaptureService : Service() {
 
         try {
             val bitmap = imageToBitmap(image)
+            Log.d("ScreenCaptureService", "Bitmap created. width=${bitmap.width}, height=${bitmap.height}")
             processScreen(bitmap)
         } finally {
             image.close()
@@ -250,6 +315,18 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        Log.d("ScreenCaptureService", "Configuration changed: orientation=${newConfig.orientation}")
+
+        // 화면 회전 시 overlayView 크기가 변경되므로 VirtualDisplay resize
+        if (virtualDisplay != null) {
+            overlayView.post {
+                resizeVirtualDisplay()
+            }
+        }
+    }
 
     override fun onDestroy() {
         super.onDestroy()

@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
+import android.util.Log
 import android.view.View
 import com.eastshine.screentranslator.screentranslate.model.TranslatedElement
 
@@ -59,6 +60,10 @@ class TranslationOverlayView(context: Context) : View(context) {
         val scaleX = width.toFloat() / sourceWidth
         val scaleY = height.toFloat() / sourceHeight
 
+        Log.d(
+            "TranslationOverlayView",
+            "onDraw() scaleX=$scaleX, scaleY=$scaleY, width=$width, sourceWidth=$sourceWidth, height=$height, sourceHeight=$sourceHeight",
+        )
         for (element in translatedElements) {
             drawTranslatedElement(canvas, element, scaleX, scaleY)
         }
