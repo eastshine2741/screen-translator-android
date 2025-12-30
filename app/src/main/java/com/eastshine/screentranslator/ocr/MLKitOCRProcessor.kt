@@ -8,7 +8,7 @@ import com.eastshine.screentranslator.util.await
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -17,7 +17,7 @@ class MLKitOCRProcessor(
 ) : OCRProcessor {
     private val recognizer =
         TextRecognition.getClient(
-            TextRecognizerOptions.DEFAULT_OPTIONS,
+            JapaneseTextRecognizerOptions.Builder().build(),
         )
 
     override suspend fun process(bitmap: Bitmap): List<TextElement> =

@@ -52,7 +52,8 @@ dependencies {
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
 
-    implementation(libs.mlkit)
+    implementation(libs.mlkit.textrecognition)
+    implementation(libs.mlkit.textrecognition.japanese)
 
     // Firebase BoM
     implementation(platform(libs.firebase.bom))
