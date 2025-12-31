@@ -22,6 +22,7 @@ import android.util.Log
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import com.eastshine.screentranslator.ocr.OCRProcessor
+import com.eastshine.screentranslator.screentranslate.Screen
 import com.eastshine.screentranslator.screentranslate.ScreenTranslator
 import com.eastshine.screentranslator.ui.TranslationOverlayView
 import dagger.hilt.android.AndroidEntryPoint
@@ -237,7 +238,14 @@ class ScreenCaptureService : Service() {
                 }
 
                 // 2. 번역 실행 (Hilt로 주입받은 객체)
-                val translatedElements = screenTranslator.translate(textElements)
+                val translatedElements =
+                    screenTranslator.translate(
+                        Screen(
+                            textElements = textElements,
+                            width = bitmap.width,
+                            height = bitmap.height,
+                        ),
+                    )
 
                 // 3. Overlay 업데이트
                 withContext(Dispatchers.Main) {
@@ -333,7 +341,6 @@ class ScreenCaptureService : Service() {
 
         scope.cancel()
         ocrProcessor.release()
-        screenTranslator.release()
         windowManager.removeView(overlayView)
         stopCapture()
         stopForeground(STOP_FOREGROUND_REMOVE)

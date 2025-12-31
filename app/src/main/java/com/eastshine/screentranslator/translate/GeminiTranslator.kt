@@ -1,54 +1,71 @@
 package com.eastshine.screentranslator.translate
 
 import android.util.Log
+import com.eastshine.screentranslator.translate.model.TranslationPrompt
 import com.google.firebase.Firebase
+import com.google.firebase.ai.GenerativeModel
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
 import com.google.firebase.ai.type.content
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/**
+ * Gemini-based LLM translator with model caching
+ */
 class GeminiTranslator(
     private val targetLanguage: String = "Korean",
 ) : LLMTranslator {
-    // TODO: fine-tuning https://firebase.google.com/docs/ai-logic/model-parameters?api=dev
-    private val generativeModel =
-        Firebase.ai(
-            backend = GenerativeBackend.googleAI(),
-        ).generativeModel(
-            modelName = "gemini-2.5-flash-lite",
-            systemInstruction =
-                content {
-                    text(
-                        """
-                        You are a professional translator.
-                        Translate text to $targetLanguage naturally and concisely.
-                        Only respond with the translated text, no explanations.
-                        If the text is already in $targetLanguage, return it as is.
-                        Preserve the original tone and meaning.
-                        """.trimIndent(),
-                    )
-                },
-        )
+    // Cache generative models by translation prompt to reuse same system instructions
+    private val modelCache = mutableMapOf<TranslationPrompt, com.google.firebase.ai.GenerativeModel>()
 
-    override suspend fun translate(text: String): String =
+    override suspend fun translate(
+        text: String,
+        translationPrompt: TranslationPrompt,
+    ): String =
         withContext(Dispatchers.IO) {
             try {
                 if (text.isBlank()) {
                     return@withContext text
                 }
 
-                // 프롬프트 생성
-                val prompt = "Translate to $targetLanguage: $text"
+                // Get or create cached model
+                val model =
+                    modelCache.getOrPut(translationPrompt) {
+                        createGenerativeModel(translationPrompt)
+                    }
 
-                // Gemini API 호출
-                val response = generativeModel.generateContent(prompt)
+                // Create user prompt
+                val userPrompt = "Translate to $targetLanguage: $text" // FIXME: pass text only
 
-                // 응답 텍스트 추출
+                // Call Gemini API
+                val response = model.generateContent(userPrompt)
+
+                // Extract response text
                 response.text?.trim() ?: text
             } catch (e: Exception) {
-                Log.e("FirebaseGeminiTranslator", "Translation failed: ${e.message}", e)
-                text // 실패 시 원본 반환
+                Log.e("GeminiTranslator", "Translation failed: ${e.message}", e)
+                text // Return original on failure
             }
         }
+
+    private fun createGenerativeModel(translationPrompt: TranslationPrompt): GenerativeModel {
+        return Firebase
+            .ai(
+                backend = GenerativeBackend.googleAI(),
+            ).generativeModel(
+                modelName = "gemini-2.5-flash-lite",
+                systemInstruction =
+                    content {
+                        text(translationPrompt.systemInstruction)
+                    },
+            )
+    }
+
+    /**
+     * Clears model cache to free resources
+     */
+    fun clearCache() {
+        modelCache.clear()
+    }
 }

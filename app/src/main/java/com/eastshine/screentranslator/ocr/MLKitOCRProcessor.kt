@@ -43,7 +43,7 @@ class MLKitOCRProcessor(
             TextElement(
                 text = block.text,
                 boundingBox = boundingBox,
-                cornerPoints = block.cornerPoints,
+                cornerPoints = block.cornerPoints?.toList(),
                 confidence = block.lines.sumOf { it.confidence.toDouble() },
             )
         }
