@@ -1,8 +1,8 @@
 package com.eastshine.screentranslator
 
 import android.content.Context
-import com.eastshine.screentranslator.character.data.repository.DataStoreCharacterPromptRepository
 import com.eastshine.screentranslator.character.domain.repository.CharacterPromptRepository
+import com.eastshine.screentranslator.character.domain.repository.DummyCharacterPromptRepository
 import com.eastshine.screentranslator.character.domain.usecase.GetCharacterPromptUseCase
 import com.eastshine.screentranslator.character.matcher.AliasMatchingStrategy
 import com.eastshine.screentranslator.character.matcher.CharacterPromptMatchingStrategy
@@ -45,7 +45,7 @@ object TranslationModule {
     fun provideCharacterPromptRepository(
         @ApplicationContext context: Context,
     ): CharacterPromptRepository {
-        return DataStoreCharacterPromptRepository(context)
+        return DummyCharacterPromptRepository()
     }
 
     // Character Prompt Matcher
