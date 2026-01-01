@@ -7,13 +7,15 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 import android.util.Log
-import android.view.MotionEvent
 import android.view.View
 import com.eastshine.screentranslator.screentranslate.model.TranslatedElement
 
+/**
+ * 번역 결과를 표시하는 오버레이 뷰.
+ * FLAG_NOT_TOUCHABLE로 설정되어 모든 터치를 하위 앱으로 전달함.
+ */
 class TranslationOverlayView(
     context: Context,
-    private val onTapListener: (() -> Unit)? = null,
 ) : View(context) {
     private val translatedElements = mutableListOf<TranslatedElement>()
 
@@ -128,14 +130,5 @@ class TranslationOverlayView(
     fun clear() {
         translatedElements.clear()
         invalidate()
-    }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_UP) {
-            onTapListener?.invoke()
-            Log.d("TranslationOverlayView", "User tapped overlay")
-            return true
-        }
-        return super.onTouchEvent(event)
     }
 }

@@ -102,11 +102,12 @@ class CaptureManager(
         )
 
         // Create ImageReader with maxImages=2 (minimum for acquireLatestImage)
+        // maxImages must be at least 2 for acquireLatestImage
         imageReader =
             ImageReader.newInstance(
                 width, height,
                 PixelFormat.RGBA_8888,
-                2, // maxImages must be at least 2 for acquireLatestImage
+                2,
             )
 
         virtualDisplay =

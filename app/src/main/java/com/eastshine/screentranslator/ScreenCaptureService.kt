@@ -11,6 +11,7 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import android.view.Gravity
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import com.eastshine.screentranslator.capture.CaptureManager
@@ -19,6 +20,7 @@ import com.eastshine.screentranslator.screentranslate.Screen
 import com.eastshine.screentranslator.screentranslate.ScreenTranslator
 import com.eastshine.screentranslator.screentranslate.model.TranslatedElement
 import com.eastshine.screentranslator.translation.TranslationTrigger
+import com.eastshine.screentranslator.ui.FloatingTranslateButton
 import com.eastshine.screentranslator.ui.TranslationOverlayView
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -48,6 +50,7 @@ class ScreenCaptureService : Service() {
     lateinit var screenTranslator: ScreenTranslator
 
     private lateinit var overlayView: TranslationOverlayView
+    private lateinit var floatingButton: FloatingTranslateButton
     private lateinit var windowManager: WindowManager
     private lateinit var captureManager: CaptureManager
 
@@ -72,6 +75,7 @@ class ScreenCaptureService : Service() {
         super.onCreate()
         createNotificationChannel()
         setupOverlayView()
+        setupFloatingButton()
 
         // Create CaptureManager (no overlay dependency)
         captureManager = CaptureManager(this)
@@ -116,11 +120,7 @@ class ScreenCaptureService : Service() {
 
     private fun setupOverlayView() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        overlayView =
-            TranslationOverlayView(this) {
-                // Tap callback - trigger translation
-                emitTrigger(TranslationTrigger.UserTap)
-            }
+        overlayView = TranslationOverlayView(this)
 
         val params =
             WindowManager.LayoutParams(
@@ -128,11 +128,43 @@ class ScreenCaptureService : Service() {
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
                 PixelFormat.TRANSLUCENT,
             )
 
         windowManager.addView(overlayView, params)
+    }
+
+    private fun setupFloatingButton() {
+        floatingButton =
+            FloatingTranslateButton(this) {
+                emitTrigger(TranslationTrigger.FloatingButtonTap)
+            }
+
+        val params =
+            WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT,
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                x = 100
+                y = 100
+            }
+
+        windowManager.addView(floatingButton, params)
+        floatingButton.setWindowParams(params, windowManager)
+
+        floatingButton.post {
+            val displayMetrics = resources.displayMetrics
+            params.x = displayMetrics.widthPixels - floatingButton.width - (16 * displayMetrics.density).toInt()
+            params.y = displayMetrics.heightPixels - floatingButton.height - (80 * displayMetrics.density).toInt()
+            windowManager.updateViewLayout(floatingButton, params)
+        }
     }
 
     private fun createNotificationChannel() {
@@ -268,6 +300,15 @@ class ScreenCaptureService : Service() {
                 emitTrigger(TranslationTrigger.ConfigurationChange)
             }
         }
+
+        // Reposition floating button to bottom-right
+        floatingButton.post {
+            val params = floatingButton.layoutParams as WindowManager.LayoutParams
+            val displayMetrics = resources.displayMetrics
+            params.x = displayMetrics.widthPixels - floatingButton.width - (16 * displayMetrics.density).toInt()
+            params.y = displayMetrics.heightPixels - floatingButton.height - (80 * displayMetrics.density).toInt()
+            windowManager.updateViewLayout(floatingButton, params)
+        }
     }
 
     override fun onDestroy() {
@@ -277,6 +318,7 @@ class ScreenCaptureService : Service() {
         ocrProcessor.release()
         captureManager.stopCapture()
         windowManager.removeView(overlayView)
+        windowManager.removeView(floatingButton)
         stopForeground(STOP_FOREGROUND_REMOVE)
     }
 }

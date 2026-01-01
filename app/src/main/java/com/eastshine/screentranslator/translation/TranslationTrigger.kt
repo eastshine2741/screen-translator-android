@@ -15,7 +15,7 @@ sealed interface TranslationTrigger {
     data object ConfigurationChange : TranslationTrigger
 
     /**
-     * Translation triggered by user tapping the overlay
+     * Translation triggered by user tapping the floating button
      */
-    data object UserTap : TranslationTrigger
+    data object FloatingButtonTap : TranslationTrigger
 }
