@@ -292,13 +292,20 @@ class ScreenCaptureService : Service() {
 
         // Resize VirtualDisplay and trigger translation
         if (captureManager.isCapturing()) {
-            overlayView.post {
-                val width = overlayView.width
-                val height = overlayView.height
+            // Wait for layout to complete before getting overlay dimensions
+            overlayView.viewTreeObserver.addOnGlobalLayoutListener(
+                object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+                    override fun onGlobalLayout() {
+                        overlayView.viewTreeObserver.removeOnGlobalLayoutListener(this)
 
-                captureManager.resizeDisplay(width, height)
-                emitTrigger(TranslationTrigger.ConfigurationChange)
-            }
+                        val width = overlayView.width
+                        val height = overlayView.height
+
+                        captureManager.resizeDisplay(width, height)
+                        emitTrigger(TranslationTrigger.ConfigurationChange)
+                    }
+                },
+            )
         }
 
         // Reposition floating button to bottom-right
