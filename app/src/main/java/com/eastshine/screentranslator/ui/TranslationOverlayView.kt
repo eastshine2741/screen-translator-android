@@ -7,10 +7,14 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 import android.util.Log
+import android.view.MotionEvent
 import android.view.View
 import com.eastshine.screentranslator.screentranslate.model.TranslatedElement
 
-class TranslationOverlayView(context: Context) : View(context) {
+class TranslationOverlayView(
+    context: Context,
+    private val onTapListener: (() -> Unit)? = null,
+) : View(context) {
     private val translatedElements = mutableListOf<TranslatedElement>()
 
     private var sourceWidth: Int = 0
@@ -86,7 +90,7 @@ class TranslationOverlayView(context: Context) : View(context) {
 
         // 텍스트 그리기
         val text = element.translatedText
-        val textBounds = android.graphics.Rect()
+        val textBounds = Rect()
         textPaint.getTextBounds(text, 0, text.length, textBounds)
 
         // 텍스트가 박스에 맞게 조정
@@ -124,5 +128,14 @@ class TranslationOverlayView(context: Context) : View(context) {
     fun clear() {
         translatedElements.clear()
         invalidate()
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.action == MotionEvent.ACTION_UP) {
+            onTapListener?.invoke()
+            Log.d("TranslationOverlayView", "User tapped overlay")
+            return true
+        }
+        return super.onTouchEvent(event)
     }
 }

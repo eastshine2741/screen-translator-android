@@ -8,31 +8,36 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
-import android.hardware.display.DisplayManager
-import android.hardware.display.VirtualDisplay
-import android.media.Image
-import android.media.ImageReader
-import android.media.projection.MediaProjection
-import android.media.projection.MediaProjectionManager
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.util.Log
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
+import com.eastshine.screentranslator.capture.CaptureManager
 import com.eastshine.screentranslator.ocr.OCRProcessor
 import com.eastshine.screentranslator.screentranslate.Screen
 import com.eastshine.screentranslator.screentranslate.ScreenTranslator
+import com.eastshine.screentranslator.screentranslate.model.TranslatedElement
+import com.eastshine.screentranslator.translation.TranslationTrigger
 import com.eastshine.screentranslator.ui.TranslationOverlayView
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.milliseconds
 
 @AndroidEntryPoint
 class ScreenCaptureService : Service() {
@@ -44,27 +49,19 @@ class ScreenCaptureService : Service() {
 
     private lateinit var overlayView: TranslationOverlayView
     private lateinit var windowManager: WindowManager
-
-    private var mediaProjection: MediaProjection? = null
-    private val mediaProjectionCallback =
-        object : MediaProjection.Callback() {
-            override fun onStop() {
-                stopCapture()
-            }
-        }
-    private var virtualDisplay: VirtualDisplay? = null
-    private var imageReader: ImageReader? = null
-    private val handler = Handler(Looper.getMainLooper())
+    private lateinit var captureManager: CaptureManager
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    private var lastProcessTime = 0L
-    private val processingInterval = 2000L
-
-    private var savedResultCode: Int = 0
-    private var savedData: Intent? = null
+    private val translationTriggers =
+        MutableSharedFlow<TranslationTrigger>(
+            replay = 0,
+            extraBufferCapacity = 1,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
 
     companion object {
+        private const val TAG = "ScreenCaptureService"
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "ScreenCaptureChannel"
         const val EXTRA_RESULT_CODE = "resultCode"
@@ -75,6 +72,12 @@ class ScreenCaptureService : Service() {
         super.onCreate()
         createNotificationChannel()
         setupOverlayView()
+
+        // Create CaptureManager (no overlay dependency)
+        captureManager = CaptureManager(this)
+
+        // Start translation pipeline
+        startTranslationPipeline()
     }
 
     override fun onStartCommand(
@@ -88,7 +91,23 @@ class ScreenCaptureService : Service() {
             val resultCode = it.getIntExtra(EXTRA_RESULT_CODE, 0)
             val data = it.getParcelableExtra<Intent>(EXTRA_DATA)
             if (resultCode != 0 && data != null) {
-                startCapture(resultCode, data)
+                // Get overlay dimensions
+                overlayView.post {
+                    val width = overlayView.width
+                    val height = overlayView.height
+
+                    captureManager.startCapture(
+                        resultCode = resultCode,
+                        data = data,
+                        width = width,
+                        height = height,
+                    )
+
+                    // Trigger initial translation after 500ms delay
+                    overlayView.postDelayed({
+                        emitTrigger(TranslationTrigger.ServiceStart)
+                    }, 500)
+                }
             }
         }
 
@@ -97,7 +116,11 @@ class ScreenCaptureService : Service() {
 
     private fun setupOverlayView() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        overlayView = TranslationOverlayView(this)
+        overlayView =
+            TranslationOverlayView(this) {
+                // Tap callback - trigger translation
+                emitTrigger(TranslationTrigger.UserTap)
+            }
 
         val params =
             WindowManager.LayoutParams(
@@ -105,195 +128,11 @@ class ScreenCaptureService : Service() {
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT,
             )
 
         windowManager.addView(overlayView, params)
-    }
-
-    private fun startCapture(
-        resultCode: Int,
-        data: Intent,
-    ) {
-        savedResultCode = resultCode
-        savedData = data
-
-        // MediaProjection 생성 (한 번만)
-        val manager = getSystemService(MediaProjectionManager::class.java)
-        mediaProjection = manager.getMediaProjection(resultCode, data)
-        mediaProjection?.registerCallback(mediaProjectionCallback, handler)
-
-        // overlayView가 레이아웃된 후에 VirtualDisplay 생성
-        overlayView.post {
-            createVirtualDisplayAndImageReader()
-        }
-    }
-
-    private fun createVirtualDisplayAndImageReader() {
-        val width = overlayView.width
-        val height = overlayView.height
-        val density = resources.displayMetrics.densityDpi
-
-        if (width <= 0 || height <= 0) {
-            Log.e("ScreenCaptureService", "OverlayView not properly laid out: width=$width, height=$height")
-            return
-        }
-
-        Log.d(
-            "ScreenCaptureService",
-            "Creating VirtualDisplay and ImageReader with dimensions: width=$width, height=$height, density=$density",
-        )
-
-        imageReader =
-            ImageReader.newInstance(
-                width, height,
-                PixelFormat.RGBA_8888,
-                2,
-            )
-
-        virtualDisplay =
-            mediaProjection?.createVirtualDisplay(
-                "ScreenCapture",
-                width, height, density,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                imageReader?.surface,
-                null, null,
-            )
-
-        imageReader?.setOnImageAvailableListener({ reader ->
-            Log.d("ScreenCaptureService", "image available")
-            captureScreen(reader)
-        }, handler)
-    }
-
-    private fun resizeVirtualDisplay() {
-        val width = overlayView.width
-        val height = overlayView.height
-        val density = resources.displayMetrics.densityDpi
-
-        if (width <= 0 || height <= 0) {
-            Log.e("ScreenCaptureService", "OverlayView not properly laid out for resize: width=$width, height=$height")
-            return
-        }
-
-        if (virtualDisplay == null) {
-            Log.e("ScreenCaptureService", "VirtualDisplay is null, cannot resize")
-            return
-        }
-
-        Log.d("ScreenCaptureService", "Resizing VirtualDisplay to: width=$width, height=$height")
-
-        // 기존 ImageReader 정리
-        imageReader?.close()
-
-        // 새로운 크기로 ImageReader 재생성
-        imageReader =
-            ImageReader.newInstance(
-                width, height,
-                PixelFormat.RGBA_8888,
-                2,
-            )
-
-        // VirtualDisplay 크기 조정 및 새 surface 설정
-        virtualDisplay?.resize(width, height, density)
-        virtualDisplay?.surface = imageReader?.surface
-
-        // 리스너 재설정
-        imageReader?.setOnImageAvailableListener({ reader ->
-            Log.d("ScreenCaptureService", "image available")
-            captureScreen(reader)
-        }, handler)
-    }
-
-    private fun captureScreen(reader: ImageReader) {
-        val image = reader.acquireLatestImage() ?: return
-
-        try {
-            val bitmap = imageToBitmap(image)
-            Log.d("ScreenCaptureService", "Bitmap created. width=${bitmap.width}, height=${bitmap.height}")
-            processScreen(bitmap)
-        } finally {
-            image.close()
-        }
-    }
-
-    private fun processScreen(bitmap: Bitmap) {
-        val currentTime = System.currentTimeMillis()
-
-        if (currentTime - lastProcessTime < processingInterval) {
-            return
-        }
-
-        lastProcessTime = currentTime
-
-        scope.launch {
-            try {
-                // 1. OCR 실행 (Hilt로 주입받은 객체)
-                val textElements = ocrProcessor.process(bitmap)
-
-                if (textElements.isEmpty()) {
-                    return@launch
-                }
-
-                // 2. 번역 실행 (Hilt로 주입받은 객체)
-                val translatedElements =
-                    screenTranslator.translate(
-                        Screen(
-                            textElements = textElements,
-                            width = bitmap.width,
-                            height = bitmap.height,
-                        ),
-                    )
-
-                // 3. Overlay 업데이트
-                withContext(Dispatchers.Main) {
-                    overlayView.updateTranslations(
-                        translatedElements,
-                        bitmap.width,
-                        bitmap.height,
-                    )
-                }
-            } catch (e: Exception) {
-                Log.e("ScreenCaptureService", "Processing failed", e)
-            }
-        }
-    }
-
-    private fun imageToBitmap(image: Image): Bitmap {
-        val planes = image.planes
-        val buffer = planes[0].buffer
-        val pixelStride = planes[0].pixelStride
-        val rowStride = planes[0].rowStride
-        val rowPadding = rowStride - pixelStride * image.width
-
-        val bitmap =
-            Bitmap.createBitmap(
-                image.width + rowPadding / pixelStride,
-                image.height,
-                Bitmap.Config.ARGB_8888,
-            )
-        bitmap.copyPixelsFromBuffer(buffer)
-
-        return Bitmap.createBitmap(
-            bitmap,
-            0,
-            0,
-            image.width,
-            image.height,
-        )
-    }
-
-    private fun stopCapture() {
-        virtualDisplay?.release()
-        imageReader?.close()
-        mediaProjection?.unregisterCallback(mediaProjectionCallback)
-        mediaProjection?.stop()
-
-        virtualDisplay = null
-        imageReader = null
-        mediaProjection = null
     }
 
     private fun createNotificationChannel() {
@@ -322,16 +161,111 @@ class ScreenCaptureService : Service() {
             .build()
     }
 
+    /**
+     * Starts the translation Flow pipeline.
+     * Handles debouncing, cancellation, and orchestrates OCR + translation.
+     */
+    private fun startTranslationPipeline() {
+        scope.launch {
+            translationTriggers
+                .debounce(300.milliseconds)
+                .onEach { trigger ->
+                    Log.d(TAG, "Processing trigger: $trigger")
+                }
+                .flatMapLatest { processTranslation() }
+                .flowOn(Dispatchers.Default)
+                .catch { e ->
+                    Log.e(TAG, "Translation pipeline failed", e)
+                }
+                .collect { (translatedElements, bitmap) ->
+                    updateOverlay(translatedElements, bitmap)
+                }
+        }
+    }
+
+    /**
+     * Processes a single translation request.
+     * Captures screen, runs OCR, translates, and returns result.
+     */
+    private fun processTranslation(): Flow<Pair<List<TranslatedElement>, Bitmap>> =
+        flow {
+            // Capture current screen on-demand
+            val bitmap =
+                captureManager.captureCurrentScreen() ?: run {
+                    Log.w(TAG, "No image available from ImageReader")
+                    return@flow
+                }
+
+            try {
+                Log.d(TAG, "Bitmap captured: ${bitmap.width}x${bitmap.height}")
+
+                // Step 1: OCR processing
+                val textElements = ocrProcessor.process(bitmap)
+                if (textElements.isEmpty()) {
+                    Log.d(TAG, "No text detected in image")
+                    return@flow
+                }
+
+                Log.d(TAG, "OCR detected ${textElements.size} text elements")
+
+                // Step 2: Translation
+                val translatedElements =
+                    screenTranslator.translate(
+                        Screen(
+                            textElements = textElements,
+                            width = bitmap.width,
+                            height = bitmap.height,
+                        ),
+                    )
+
+                Log.d(TAG, "Translation completed: ${translatedElements.size} elements")
+
+                emit(translatedElements to bitmap)
+            } finally {
+                // Note: Bitmap could be recycled here for memory optimization
+                // bitmap.recycle() - only if not used elsewhere
+            }
+        }
+
+    /**
+     * Updates overlay with translation results on Main thread.
+     */
+    private suspend fun updateOverlay(
+        translatedElements: List<TranslatedElement>,
+        bitmap: Bitmap,
+    ) {
+        withContext(Dispatchers.Main) {
+            overlayView.updateTranslations(
+                translatedElements,
+                bitmap.width,
+                bitmap.height,
+            )
+        }
+    }
+
+    /**
+     * Emits a translation trigger event.
+     */
+    private fun emitTrigger(trigger: TranslationTrigger) {
+        scope.launch {
+            translationTriggers.emit(trigger)
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        Log.d("ScreenCaptureService", "Configuration changed: orientation=${newConfig.orientation}")
+        Log.d(TAG, "Configuration changed: orientation=${newConfig.orientation}")
 
-        // 화면 회전 시 overlayView 크기가 변경되므로 VirtualDisplay resize
-        if (virtualDisplay != null) {
+        // Resize VirtualDisplay and trigger translation
+        if (captureManager.isCapturing()) {
             overlayView.post {
-                resizeVirtualDisplay()
+                val width = overlayView.width
+                val height = overlayView.height
+
+                captureManager.resizeDisplay(width, height)
+                emitTrigger(TranslationTrigger.ConfigurationChange)
             }
         }
     }
@@ -339,10 +273,10 @@ class ScreenCaptureService : Service() {
     override fun onDestroy() {
         super.onDestroy()
 
-        scope.cancel()
+        scope.cancel() // Cancels all flows automatically
         ocrProcessor.release()
+        captureManager.stopCapture()
         windowManager.removeView(overlayView)
-        stopCapture()
         stopForeground(STOP_FOREGROUND_REMOVE)
     }
 }
