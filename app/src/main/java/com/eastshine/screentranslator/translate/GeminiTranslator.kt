@@ -36,7 +36,7 @@ class GeminiTranslator(
                     }
 
                 // Create user prompt
-                val userPrompt = "Translate to $targetLanguage: $text" // FIXME: pass text only
+                val userPrompt = "Translate Unknown's following dialogue: $text" // FIXME: pass text only
 
                 // Call Gemini API
                 val response = model.generateContent(userPrompt)

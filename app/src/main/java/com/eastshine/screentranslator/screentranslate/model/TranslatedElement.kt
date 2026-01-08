@@ -9,4 +9,6 @@ data class TranslatedElement(
     val boundingBox: Rect,
     val cornerPoints: List<Point>?,
     val confidence: Double,
+    val speaker: String?,
+    val characterName: String,
 )

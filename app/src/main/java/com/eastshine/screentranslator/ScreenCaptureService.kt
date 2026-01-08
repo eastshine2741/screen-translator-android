@@ -15,12 +15,15 @@ import android.view.Gravity
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import com.eastshine.screentranslator.capture.CaptureManager
+import com.eastshine.screentranslator.debug.DebugConfig
+import com.eastshine.screentranslator.debug.LogcatReader
 import com.eastshine.screentranslator.ocr.OCRProcessor
 import com.eastshine.screentranslator.screentranslate.Screen
 import com.eastshine.screentranslator.screentranslate.ScreenTranslator
 import com.eastshine.screentranslator.screentranslate.model.TranslatedElement
 import com.eastshine.screentranslator.translation.TranslationTrigger
 import com.eastshine.screentranslator.ui.FloatingTranslateButton
+import com.eastshine.screentranslator.ui.LogcatOverlayView
 import com.eastshine.screentranslator.ui.TranslationOverlayView
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -54,6 +57,8 @@ class ScreenCaptureService : Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var captureManager: CaptureManager
 
+    private var logcatOverlayView: LogcatOverlayView? = null
+
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private val translationTriggers =
@@ -77,11 +82,19 @@ class ScreenCaptureService : Service() {
         setupOverlayView()
         setupFloatingButton()
 
+        if (DebugConfig.isDebugEnabled) {
+            setupLogcatOverlay()
+        }
+
         // Create CaptureManager (no overlay dependency)
         captureManager = CaptureManager(this)
 
         // Start translation pipeline
         startTranslationPipeline()
+
+        if (DebugConfig.isDebugEnabled) {
+            startLogcatStreaming()
+        }
     }
 
     override fun onStartCommand(
@@ -164,6 +177,38 @@ class ScreenCaptureService : Service() {
             params.x = displayMetrics.widthPixels - floatingButton.width - (16 * displayMetrics.density).toInt()
             params.y = displayMetrics.heightPixels - floatingButton.height - (80 * displayMetrics.density).toInt()
             windowManager.updateViewLayout(floatingButton, params)
+        }
+    }
+
+    private fun setupLogcatOverlay() {
+        logcatOverlayView = LogcatOverlayView(this)
+
+        // Convert 200dp to pixels
+        val displayMetrics = resources.displayMetrics
+        val widthPx = (300 * displayMetrics.density).toInt()
+        val heightPx = (200 * displayMetrics.density).toInt()
+
+        val params =
+            WindowManager.LayoutParams(
+                widthPx,
+                heightPx,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT,
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+            }
+
+        windowManager.addView(logcatOverlayView, params)
+        logcatOverlayView?.setWindowParams(params, windowManager)
+    }
+
+    private fun startLogcatStreaming() {
+        scope.launch {
+            LogcatReader.streamLogs().collect { line ->
+                logcatOverlayView?.appendLog(line)
+            }
         }
     }
 
@@ -326,6 +371,11 @@ class ScreenCaptureService : Service() {
         captureManager.stopCapture()
         windowManager.removeView(overlayView)
         windowManager.removeView(floatingButton)
+
+        if (DebugConfig.isDebugEnabled) {
+            logcatOverlayView?.let { windowManager.removeView(it) }
+        }
+
         stopForeground(STOP_FOREGROUND_REMOVE)
     }
 }

@@ -8,6 +8,7 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.util.Log
 import android.view.View
+import com.eastshine.screentranslator.debug.DebugConfig
 import com.eastshine.screentranslator.screentranslate.model.TranslatedElement
 
 /**
@@ -42,6 +43,13 @@ class TranslationOverlayView(
             style = Paint.Style.STROKE
             color = Color.argb(150, 0, 255, 0)
             strokeWidth = 2f
+            isAntiAlias = true
+        }
+
+    private val debugPaint =
+        Paint().apply {
+            color = Color.YELLOW
+            textSize = 20f
             isAntiAlias = true
         }
 
@@ -112,6 +120,12 @@ class TranslationOverlayView(
 
         // 텍스트 크기 원상복구
         textPaint.textSize = 40f
+
+        // Draw debug info only if debug mode is enabled
+        if (DebugConfig.isDebugEnabled) {
+            val debugInfo = "Speaker: ${element.speaker ?: "null"} | Char: ${element.characterName}"
+            canvas.drawText(debugInfo, textX, rect.bottom + 16f, debugPaint)
+        }
     }
 
     private fun transformRect(

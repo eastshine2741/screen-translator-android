@@ -68,6 +68,8 @@ class ScreenTranslator(
                                 boundingBox = elementWithSpeaker.textElement.boundingBox,
                                 cornerPoints = elementWithSpeaker.textElement.cornerPoints,
                                 confidence = elementWithSpeaker.textElement.confidence,
+                                speaker = elementWithSpeaker.speaker,
+                                characterName = characterPrompt.characterName,
                             )
                         } catch (e: Exception) {
                             Log.e(
@@ -84,6 +86,8 @@ class ScreenTranslator(
                                 boundingBox = element.boundingBox,
                                 cornerPoints = element.cornerPoints,
                                 confidence = element.confidence,
+                                speaker = elementWithSpeaker.speaker,
+                                characterName = "ERROR",
                             )
                         }
                     }

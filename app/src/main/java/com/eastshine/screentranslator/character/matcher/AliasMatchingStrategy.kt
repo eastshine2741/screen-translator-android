@@ -16,7 +16,9 @@ class AliasMatchingStrategy : CharacterPromptMatchingStrategy {
         return characterPrompts.firstOrNull { characterPrompt ->
             characterPrompt.aliases.any { alias ->
                 val normalizedAlias = alias.trim().lowercase()
-                normalizedSpeaker == normalizedAlias
+                normalizedSpeaker == normalizedAlias ||
+                    normalizedSpeaker.contains(normalizedAlias) ||
+                    normalizedAlias.contains(normalizedSpeaker)
             }
         }
     }
